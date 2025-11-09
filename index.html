@@ -3,508 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Focus Timer (React)</title>
+    <title>Focus Timer</title>
     
-    <!-- 1. TailwindCSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 2. Font Awesome for Icons -->
+    <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     
-    <!-- 3. Google Fonts -->
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
     
-    <!-- 4. React & Babel CDNs -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <style>
-        :root {
-            --font-digital: 'Orbitron', sans-serif;
-            --font-ui: 'Manrope', sans-serif;
-            --color-bg: #f9fafb; /* bg-gray-50 */
-            --color-text: #1f2937; /* text-gray-800 */
-            --color-text-dim: #6b7280; /* text-gray-500 */
-            --color-border: #e5e7eb; /* border-gray-200 */
-            
-            /* Gradients (Default) */
-            --color-accent-start: #c4b5fd;
-            --color-accent-end: #f0abfc;
-        }
-
-        /* State-based Theming */
-        body.state-focus {
-            --color-bg: #fef2f2;
-            --color-accent-start: #fda4af;
-            --color-accent-end: #fb923c;
-        }
-        body.state-break {
-            --color-bg: #eff6ff;
-            --color-accent-start: #93c5fd;
-            --color-accent-end: #5eead4;
-        }
-
-        /* Base Styles */
-        body {
-            font-family: var(--font-ui);
-            background-color: var(--color-bg);
-            color: var(--color-text);
-            transition: background-color 0.5s ease;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            user-select: none;
-            /* Ensure full height on mobile */
-            min-height: 100vh;
-        }
-        
-        #root {
-            @apply flex flex-col items-center justify-center h-screen w-full p-4;
-            min-height: 100vh;
-        }
-
-        /* Helper for gradient text */
-        .gradient-text {
-            background-image: linear-gradient(to right, var(--color-accent-start), var(--color-accent-end));
-            background-clip: text;
-            -webkit-background-clip: text;
-            color: transparent;
-            transition: all 0.5s ease;
-        }
-        /* Helper for gradient button */
-        .btn-primary {
-            background-image: linear-gradient(to right, var(--color-accent-start), var(--color-accent-end));
-            color: white;
-            box-shadow: 0 4px 20px -5px var(--color-accent-start);
-            transition: all 0.5s ease;
-        }
-        .btn-primary:hover {
-            filter: brightness(1.1);
-            box-shadow: 0 6px 25px -5px var(--color-accent-start);
-        }
-        /* Mode button active state */
-        .mode-btn-active {
-            background-image: linear-gradient(to right, var(--color-accent-start), var(--color-accent-end));
-            color: white !important;
-            box-shadow: 0 4px 20px -5px var(--color-accent-start);
-        }
-        
-        /* Custom range slider */
-        input[type="range"] {
-            -webkit-appearance: none;
-            @apply w-full h-2 rounded-lg cursor-pointer;
-            background-color: var(--color-border);
-        }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            @apply w-5 h-5 rounded-full;
-            background-image: linear-gradient(to right, var(--color-accent-start), var(--color-accent-end));
-        }
-    </style>
+    <!-- Link to your new CSS file -->
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <!-- This is where our React app will live -->
-    <div id="root"></div>
-
-    <!-- Our high-quality alarm sound -->
+    <!-- Alarm Sound -->
     <audio id="alarm-sound" src="https://actions.google.com/sounds/v1/impacts/ringing_vessel_solid.ogg" preload="auto"></audio>
     
-    <!-- This is our React App! -->
-    <script type="text/babel">
-
-        const { useState, useEffect, useCallback, useMemo, useRef } = React;
-
-        // --- Helper: Get default settings from localStorage ---
-        const getInitialSettings = () => {
-            try {
-                const saved = localStorage.getItem('pomodoroSettings');
-                if (saved) return JSON.parse(saved);
-            } catch (e) { console.error("Failed to parse settings", e); }
-            return { focus: 25, short: 5, long: 15, sessions: 4 };
-        };
-        
-        // --- Helper: Get default sound settings ---
-        const getInitialSound = () => {
-            try {
-                const saved = localStorage.getItem('pomodoroSound');
-                if (saved) return JSON.parse(saved);
-            } catch (e) { console.error("Failed to parse sound settings", e); }
-            // Set sound ID to null on load. Do NOT auto-play.
-            return { volume: 0.5, currentSoundId: null };
-        }
-
-        // --- Helper: Format time from seconds to MM:SS ---
-        const formatTime = (seconds) => {
-            const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
-            const remainingSeconds = String(seconds % 60).padStart(2, '0');
-            return `${minutes}:${remainingSeconds}`;
-        };
-        
-        // --- Ambient Sound Data (Reliable URLs from Pixabay) ---
-        const ambientSounds = [
-            { id: 'rain', name: 'Rain', icon: 'fa-solid fa-cloud-showers-heavy', url: 'https://cdn.pixabay.com/audio/2022/08/18/audio_16b864a64f.mp3' },
-            { id: 'forest', name: 'Forest', icon: 'fa-solid fa-tree', url: 'https://cdn.pixabay.com/audio/2022/04/18/audio_65ed360e58.mp3' },
-            { id: 'coffee', name: 'Coffee Shop', icon: 'fa-solid fa-mug-saucer', url: 'https://cdn.pixabay.com/audio/2022/07/27/audio_82c9b4e363.mp3' },
-            { id: 'noise', name: 'White Noise', icon: 'fa-solid fa-wave-square', url: 'https://cdn.pixabay.com/audio/2022/05/29/audio_38fa080a71.mp3' }
-        ];
-
-
-        // --- Main App Component ---
-        function App() {
-            // --- State ---
-            const [settings, setSettings] = useState(getInitialSettings);
-            const [currentMode, setCurrentMode] = useState('focus'); // 'focus', 'short', 'long'
-            const [isActive, setIsActive] = useState(false);
-            const [timeRemaining, setTimeRemaining] = useState(settings.focus * 60);
-            const [sessionCount, setSessionCount] = useState(0);
-            
-            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-            const [isSoundsOpen, setIsSoundsOpen] = useState(false);
-            
-            // --- Audio State ---
-            const [alarm] = useState(() => document.getElementById('alarm-sound'));
-            
-            const initialSound = getInitialSound();
-            const [ambientVolume, setAmbientVolume] = useState(initialSound.volume);
-            const [currentSoundId, setCurrentSoundId] = useState(initialSound.currentSoundId);
-            
-            // Use a ref to hold the audio object
-            const ambientAudioRef = useRef(null);
-
-            // --- Memoized Value ---
-            const modeTime = useMemo(() => {
-                switch(currentMode) {
-                    case 'short': return settings.short * 60;
-                    case 'long': return settings.long * 60;
-                    default: return settings.focus * 60;
-                }
-            }, [currentMode, settings]);
-            
-            // --- Effects ---
-            
-            // The Core Timer Logic
-            useEffect(() => {
-                if (!isActive) return;
-                if (timeRemaining <= 0) {
-                    alarm.play();
-                    autoSwitchMode();
-                    return;
-                }
-                const interval = setInterval(() => {
-                    setTimeRemaining(prev => prev - 1);
-                }, 1000);
-                return () => clearInterval(interval);
-            }, [isActive, timeRemaining]);
-            
-            // Update timer when mode or settings change
-            useEffect(() => {
-                setIsActive(false); // Stop timer on switch
-                setTimeRemaining(modeTime);
-            }, [currentMode, settings, modeTime]);
-
-            // Update document title
-            useEffect(() => {
-                document.title = `${formatTime(timeRemaining)} - ${currentMode} mode`;
-            }, [timeRemaining, currentMode]);
-            
-            // Update body class for theming
-            useEffect(() => {
-                document.body.className = `state-${currentMode}`;
-            }, [currentMode]);
-            
-            // Save settings to localStorage
-            useEffect(() => {
-                localStorage.setItem('pomodoroSettings', JSON.stringify(settings));
-            }, [settings]);
-            
-            // Save sound settings to localStorage
-            useEffect(() => {
-                // Only save volume, don't save the sound ID to prevent auto-play
-                localStorage.setItem('pomodoroSound', JSON.stringify({ volume: ambientVolume, currentSoundId: null }));
-            }, [ambientVolume]);
-
-            // --- Ambient Sound Effects ---
-            
-            // Effect to update volume
-            useEffect(() => {
-                if (ambientAudioRef.current) {
-                    ambientAudioRef.current.volume = ambientVolume;
-                }
-            }, [ambientVolume]);
-
-            // --- Event Handlers ---
-            
-            const toggleTimer = () => {
-                if (Notification.permission === 'default') {
-                    Notification.requestPermission();
-                }
-                setIsActive(!isActive);
-            };
-
-            const setMode = (mode) => {
-                setCurrentMode(mode);
-            };
-            
-            const autoSwitchMode = useCallback(() => {
-                let nextMode;
-                if (currentMode === 'focus') {
-                    const newSessionCount = sessionCount + 1;
-                    setSessionCount(newSessionCount);
-                    nextMode = (newSessionCount % settings.sessions === 0) ? 'long' : 'short';
-                } else {
-                    nextMode = 'focus';
-                }
-                sendNotification(nextMode);
-                setCurrentMode(nextMode);
-                setIsActive(true); // Auto-start next session
-            }, [currentMode, sessionCount, settings.sessions]);
-
-            const skipTimer = () => {
-                alarm.play();
-                autoSwitchMode();
-            };
-
-            const sendNotification = (mode) => {
-                if (Notification.permission !== 'granted') return;
-                const body = mode === 'focus' ? 'Time to focus!' : 'Time for a break!';
-                new Notification("Focus Timer", { body });
-            };
-            
-            // --- Fixed Ambient Sound Handler ---
-            const playSound = (sound) => {
-                
-                if (ambientAudioRef.current) {
-                    // Stop existing sound
-                    ambientAudioRef.current.pause();
-                    ambientAudioRef.current = null;
-                }
-
-                if (currentSoundId === sound.id) {
-                    // We just wanted to stop it
-                    setCurrentSoundId(null);
-                } else {
-                    // We want to start a new sound
-                    const newAudio = new Audio(sound.url);
-                    newAudio.loop = true;
-                    newAudio.volume = ambientVolume;
-                    newAudio.play().catch(e => console.error("Audio play failed:", e));
-                    
-                    ambientAudioRef.current = newAudio;
-                    setCurrentSoundId(sound.id);
-                }
-            };
-            
-            const handleVolumeChange = (e) => {
-                const newVolume = parseFloat(e.target.value);
-                setAmbientVolume(newVolume);
-            };
-
-            return (
-                <React.Fragment>
-                    {/* --- Header --- */}
-                    <header className="flex justify-between items-center p-4 w-full absolute top-0 left-0">
-                        <h1 className="text-xl font-bold digital-font app-title">
-                            <i className="fa-solid fa-bolt-lightning"></i> focus.io
-                        </h1>
-                        {/* RESPONSIVE: Tighter icon spacing on mobile */}
-                        <div className="flex space-x-1 sm:space-x-2">
-                            {/* --- Sounds Popover Button --- */}
-                            <div className="relative">
-                                <button 
-                                    onClick={() => setIsSoundsOpen(!isSoundsOpen)} 
-                                    className="btn-icon text-xl" 
-                                    title="Ambient Sounds"
-                                >
-                                    <i className="fas fa-music"></i>
-                                </button>
-                                {isSoundsOpen && (
-                                    <SoundsPopover 
-                                        sounds={ambientSounds}
-                                        currentSoundId={currentSoundId}
-                                        onPlaySound={playSound} 
-                                        volume={ambientVolume}
-                                        onVolumeChange={handleVolumeChange}
-                                    />
-                                )}
-                            </div>
-                            
-                            {/* --- Settings Modal Button --- */}
-                            <button 
-                                onClick={() => setIsSettingsOpen(true)} 
-                                className="btn-icon text-xl" 
-                                title="Settings"
-                            >
-                                <i className="fas fa-cog"></i>
-                            </button>
-                        </div>
-                    </header>
-                    
-                    {/* --- Main Timer Content --- */}
-                    <div className="flex flex-col items-center justify-center text-center">
-                        {/* RESPONSIVE: Reduced margin on mobile */}
-                        <div className="flex space-x-2 md:space-x-4 justify-center mb-6 sm:mb-10 bg-gray-200 p-2 rounded-full">
-                            <ModeButton mode="focus" currentMode={currentMode} onClick={setMode}>Focus</ModeButton>
-                            <ModeButton mode="short" currentMode={currentMode} onClick={setMode}>Short Break</ModeButton>
-                            <ModeButton mode="long" currentMode={currentMode} onClick={setMode}>Long Break</ModeButton>
-                        </div>
-
-                        {/* RESPONSIVE: Reduced base font size */}
-                        <div className="timer-text digital-font text-6xl sm:text-8xl md:text-9xl font-bold tracking-widest mb-6 sm:mb-10">
-                            {formatTime(timeRemaining)}
-                        </div>
-
-                        {/* RESPONSIVE: Reduced margin on mobile */}
-                        <div className="flex space-x-4 justify-center mb-6 sm:mb-10">
-                            {/* RESPONSIVE: Adjusted size/font */}
-                            <button 
-                                onClick={toggleTimer} 
-                                className="btn btn-primary text-3xl w-20 h-20 sm:text-4xl sm:w-24 sm:h-24 rounded-full flex items-center justify-center" 
-                                title={isActive ? 'Pause (Space)' : 'Start (Space)'}
-                            >
-                                <i className={`fas ${isActive ? 'fa-pause' : 'fa-play'}`}></i>
-                            </button>
-                            {/* RESPONSIVE: Adjusted size/font */}
-                            <button 
-                                onClick={skipTimer}
-                                className="btn btn-secondary text-xl w-20 h-20 sm:text-2xl sm:w-24 sm:h-24 rounded-full flex items-center justify-center" 
-                                title="Skip Session"
-                            >
-                                <i className="fas fa-forward-step"></i>
-                            </button>
-                        </div>
-
-                        {/* RESPONSIVE: Reduced base font size */}
-                        <div className="session-text digital-font text-base sm:text-lg tracking-wider">
-                            Session: {sessionCount % settings.sessions || (sessionCount > 0 ? settings.sessions : 0)} of {settings.sessions}
-                        </div>
-                    </div>
-                    
-                    {/* --- Settings Modal --- */}
-                    {isSettingsOpen && (
-                        <SettingsModal 
-                            settings={settings}
-                            onClose={() => setIsSettingsOpen(false)}
-                            onSave={(newSettings) => {
-                                setSettings(newSettings);
-                                setIsSettingsOpen(false);
-                            }} 
-                        />
-                    )}
-                </React.Fragment>
-            );
-        }
-
-        // --- Child Component: ModeButton ---
-        function ModeButton({ mode, currentMode, onClick, children }) {
-            const isActive = mode === currentMode;
-            return (
-                <button 
-                    onClick={() => onClick(mode)}
-                    // RESPONSIVE: Tighter padding on mobile
-                    className={`mode-btn digital-font py-2 px-3 sm:px-6 rounded-full uppercase tracking-wider text-xs sm:text-sm font-bold transition-all ${
-                        isActive 
-                        ? 'mode-btn-active' 
-                        : 'text-gray-500 hover:text-gray-800'
-                    }`}
-                >
-                    {children}
+    <!-- App Header -->
+    <header class="app-header">
+        <h1 class="app-title">
+            <i class="fa-solid fa-bolt-lightning"></i>
+            focus.io
+        </h1>
+        <div class="header-actions">
+            <!-- Sounds Popover Button -->
+            <div class="popover-container">
+                <button id="sounds-btn" class="btn-icon" title="Ambient Sounds">
+                    <i class="fas fa-music"></i>
                 </button>
-            );
-        }
-        
-        // --- Child Component: SoundsPopover (Upgraded) ---
-        function SoundsPopover({ sounds, currentSoundId, onPlaySound, volume, onVolumeChange }) {
-            // RESPONSIVE: Made width flexible
-            return (
-                <div className="absolute top-12 right-0 w-full max-w-xs sm:w-56 bg-white rounded-lg shadow-xl p-4 z-10 border border-gray-200">
-                    <div className="space-y-2">
-                        {sounds.map(sound => (
-                            <button 
-                                key={sound.id}
-                                onClick={() => onPlaySound(sound)}
-                                className={`w-full flex items-center space-x-3 p-2 rounded-md text-left ${
-                                    currentSoundId === sound.id 
-                                    ? 'text-white' // Active sound
-                                    : 'text-gray-700 hover:bg-gray-100'
-                                }`}
-                                // Apply gradient to active button
-                                style={currentSoundId === sound.id ? { 
-                                    backgroundImage: 'linear-gradient(to right, var(--color-accent-start), var(--color-accent-end))' 
-                                } : {}}
-                            >
-                                <i className={sound.icon}></i>
-                                <span>{sound.name}</span>
-                            </button>
-                        ))}
+                <!-- Sounds Popover (hidden by default) -->
+                <div id="sounds-popover" class="popover popover-hidden">
+                    <div class="sounds-list">
+                        <!-- Sound buttons will be added by JS -->
                     </div>
-                    <hr className="my-4 border-gray-200" />
-                    <div className="flex items-center space-x-2">
-                        <i className={`fas ${volume > 0 ? 'fa-volume-low' : 'fa-volume-off'} text-gray-500`}></i>
-                        <input 
-                            type="range" 
-                            min="0" 
-                            max="1" 
-                            step="0.05" 
-                            value={volume}
-                            onChange={onVolumeChange}
-                        />
+                    <hr class="popover-divider" />
+                    <div class="volume-control">
+                        <i id="volume-icon" class="fas fa-volume-low"></i>
+                        <input id="volume-slider" type="range" min="0" max="1" step="0.05" value="0.5">
                     </div>
                 </div>
-            );
-        }
+            </div>
+            
+            <!-- Settings Modal Button -->
+            <button id="settings-btn" class="btn-icon" title="Settings">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </header>
 
-        // --- Child Component: SettingsModal ---
-        function SettingsModal({ settings, onClose, onSave }) {
-            const [formState, setFormState] = useState(settings);
+    <!-- Main Content: Centered Timer -->
+    <main class="timer-container">
+        <!-- Mode Buttons -->
+        <div class="mode-toggle-group">
+            <button id="focus-btn" class="mode-btn digital-font mode-btn-active">Focus</button>
+            <button id="short-btn" class="mode-btn digital-font">Short Break</button>
+            <button id="long-btn" class="mode-btn digital-font">Long Break</button>
+        </div>
 
-            const handleChange = (e) => {
-                const { name, value } = e.target;
-                setFormState(prev => ({ ...prev, [name]: parseInt(value) }));
-            };
+        <!-- Main Timer Display -->
+        <div id="timer-display" class="timer-text digital-font">
+            25:00
+        </div>
 
-            const handleSave = () => {
-                onSave(formState);
-            };
+        <!-- Main Control Buttons -->
+        <div class="controls-group">
+            <button id="start-pause-btn" class="btn btn-primary" title="Start (Space)">
+                <i class="fas fa-play"></i>
+            </button>
+            <button id="skip-btn" class="btn btn-secondary" title="Skip Session">
+                <i class="fas fa-forward-step"></i>
+            </button>
+        </div>
 
-            return (
-                // RESPONSIVE: Added p-4 for mobile padding
-                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-                    {/* RESPONSIVE: Made width responsive */}
-                    <div className="bg-white p-6 sm:p-8 rounded-lg shadow-xl text-left w-full max-w-md">
-                        <h2 className="text-2xl text-gray-800 font-bold mb-6">Settings</h2>
-                        {/* RESPONSIVE: Made grid responsive */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-gray-500 text-sm font-bold mb-2">Focus</label>
-                                <input type="number" name="focus" value={formState.focus} onChange={handleChange} min="1" className="bg-gray-100 text-gray-800 p-2 rounded w-full border border-gray-300" />
-                            </div>
-                            <div>
-                                <label className="block text-gray-500 text-sm font-bold mb-2">Short Break</label>
-                                <input type="number" name="short" value={formState.short} onChange={handleChange} min="1" className="bg-gray-100 text-gray-800 p-2 rounded w-full border border-gray-300" />
-                            </div>
-                            <div>
-                                <label className="block text-gray-500 text-sm font-bold mb-2">Long Break</label>
-                                <input type="number" name="long" value={formState.long} onChange={handleChange} min="1" className="bg-gray-100 text-gray-800 p-2 rounded w-full border border-gray-300" />
-                            </div>
-                            <div>
-                                <label className="block text-gray-500 text-sm font-bold mb-2">Sessions</label>
-                                <input type="number" name="sessions" value={formState.sessions} onChange={handleChange} min="1" className="bg-gray-100 text-gray-800 p-2 rounded w-full border border-gray-300" />
-                            </div>
-                        </div>
-                        <div className="mt-6 flex justify-end space-x-4">
-                            <button onClick={onClose} className="btn btn-secondary py-2 px-6 rounded-lg font-semibold transition-all shadow-md bg-white text-gray-500 border border-gray-200 hover:bg-gray-50">Cancel</button>
-                            <button onClick={handleSave} className="btn btn-primary py-2 px-6 rounded-lg font-semibold transition-all shadow-md">Save</button>
-                        </div>
-                    </div>
+        <!-- Session Counter -->
+        <div id="session-count" class="session-text digital-font">
+            Session: 1 of 4
+        </div>
+    </main>
+
+    <!-- Settings Modal (hidden by default) -->
+    <div id="settings-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <h2 class="modal-title">Settings</h2>
+            <div class="modal-grid">
+                <div>
+                    <label for="focus-time">Focus (min)</label>
+                    <input type="number" id="focus-time" min="1">
                 </div>
-            );
-        }
+                 <div>
+                    <label for="short-time">Short Break (min)</label>
+                    <input type="number" id="short-time" min="1">
+                </div>
+                <div>
+                    <label for="long-time">Long Break (min)</label>
+                    <input type="number" id="long-time" min="1">
+                </div>
+                <div>
+                    <label for="sessions">Sessions</label>
+                    <input type="number" id="sessions" min="1">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="close-settings-btn" class="btn btn-secondary">Cancel</button>
+                <button id="save-settings-btn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </div>
 
-        // --- Render the App ---
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-
-    </script>
+    <!-- Link to your new JavaScript file -->
+    <!-- 'defer' ensures the script runs after the HTML is loaded -->
+    <script src="app.js" defer></script>
 </body>
 </html>
